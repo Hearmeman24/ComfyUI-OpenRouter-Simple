@@ -61,6 +61,30 @@ class PayloadTests(unittest.TestCase):
         self.assertIn("temperature", info["omitted"])
         self.assertIn("seed", info["omitted"])
 
+    def test_all_nine_media_items_are_serialized_in_order(self):
+        media = [
+            *(PreparedMedia("image", "image/webp", bytes([index]), 1, {}) for index in range(3)),
+            *(PreparedMedia("video", "video/mp4", bytes([index]), 1, {}) for index in range(3)),
+            *(PreparedMedia("audio", "audio/mpeg", bytes([index]), 1, {}) for index in range(3)),
+        ]
+        payload, _info = build_payload(
+            model=model("max_tokens"),
+            system_prompt="",
+            user_prompt="enumerate every attachment",
+            media=media,
+            reasoning_effort="auto",
+            seed=0,
+            temperature=1,
+            max_tokens=256,
+            response_format="text",
+            zdr=False,
+        )
+        content = payload["messages"][0]["content"]
+        self.assertEqual(
+            [part["type"] for part in content],
+            ["text"] + ["image_url"] * 3 + ["video_url"] * 3 + ["input_audio"] * 3,
+        )
+
     def test_json_format_requires_model_support(self):
         with self.assertRaisesRegex(ValueError, "JSON response"):
             build_payload(

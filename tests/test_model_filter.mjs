@@ -5,6 +5,7 @@ import {
     CATALOG_ERROR,
     CHOOSE_MODEL,
     compatibleModels,
+    desiredMediaInputNames,
     nextModelValue,
     requiredModalities,
 } from "../web/model_filter.mjs";
@@ -19,12 +20,48 @@ const models = [
 
 test("connected modalities are intersected", () => {
     const required = requiredModalities([
-        { name: "image", link: 2 },
+        { name: "image_2", link: 2 },
         { name: "video", link: 3 },
-        { name: "audio", link: null },
+        { name: "audio_3", link: null },
     ]);
     assert.deepEqual([...required].sort(), ["image", "text", "video"]);
     assert.deepEqual(compatibleModels(models, required), ["omni", "video"]);
+});
+
+test("progressive sockets retain one empty successor per modality", () => {
+    const initial = desiredMediaInputNames([
+        { name: "image", link: null },
+        { name: "image_2", link: null },
+        { name: "image_3", link: null },
+        { name: "video", link: null },
+        { name: "video_2", link: null },
+        { name: "video_3", link: null },
+        { name: "audio", link: null },
+        { name: "audio_2", link: null },
+        { name: "audio_3", link: null },
+    ]);
+    assert.deepEqual([...initial], ["image", "video", "audio"]);
+
+    const growing = desiredMediaInputNames([
+        { name: "image", link: 1 },
+        { name: "image_2", link: 2 },
+        { name: "video", link: 3 },
+        { name: "audio", link: null },
+    ]);
+    assert.deepEqual(
+        [...growing],
+        ["image", "image_2", "image_3", "video", "video_2", "audio"],
+    );
+});
+
+test("a restored non-contiguous link never loses its socket", () => {
+    const desired = desiredMediaInputNames([
+        { name: "image", link: null },
+        { name: "image_2", link: 9 },
+        { name: "video", link: null },
+        { name: "audio", link: null },
+    ]);
+    assert.deepEqual([...desired], ["image", "image_2", "image_3", "video", "audio"]);
 });
 
 test("all three media inputs require an omni input model", () => {

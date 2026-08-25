@@ -5,6 +5,8 @@ import {
     NO_MODEL,
     CATALOG_ERROR,
     MEDIA_INPUTS,
+    MEDIA_SPECS,
+    desiredMediaInputNames,
     requiredModalities,
     compatibleModels,
     nextModelValue,
@@ -62,8 +64,32 @@ async function refreshModels(node) {
     node.graph?.setDirtyCanvas(true, true);
 }
 
-function scheduleRefresh(node) {
-    queueMicrotask(() => void refreshModels(node));
+function syncProgressiveInputs(node) {
+    const desired = desiredMediaInputNames(node.inputs || []);
+    for (let index = (node.inputs?.length || 0) - 1; index >= 0; index -= 1) {
+        const input = node.inputs[index];
+        if (MEDIA_INPUTS.has(input?.name) && !desired.has(input.name) && input.link == null) {
+            node.removeInput(index);
+        }
+    }
+    for (const spec of MEDIA_SPECS) {
+        for (const name of spec.names) {
+            if (desired.has(name) && !node.inputs?.some((input) => input.name === name)) {
+                node.addInput(name, spec.type);
+            }
+        }
+    }
+    node.graph?.setDirtyCanvas(true, true);
+}
+
+function scheduleNodeUpdate(node) {
+    if (node.openRouterUpdateScheduled) return;
+    node.openRouterUpdateScheduled = true;
+    queueMicrotask(() => {
+        node.openRouterUpdateScheduled = false;
+        syncProgressiveInputs(node);
+        void refreshModels(node);
+    });
 }
 
 app.registerExtension({
@@ -74,22 +100,23 @@ app.registerExtension({
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             const result = onNodeCreated?.apply(this, arguments);
-            scheduleRefresh(this);
+            scheduleNodeUpdate(this);
             return result;
         };
 
         const onConfigure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function () {
             const result = onConfigure?.apply(this, arguments);
-            scheduleRefresh(this);
+            scheduleNodeUpdate(this);
             return result;
         };
 
         const onConnectionsChange = nodeType.prototype.onConnectionsChange;
         nodeType.prototype.onConnectionsChange = function (slotType, slotIndex, connected, linkInfo, slot) {
+            const slotName = slot?.name || this.inputs?.[slotIndex]?.name;
             const result = onConnectionsChange?.apply(this, arguments);
-            if (slotType === 1 && MEDIA_INPUTS.has(slot?.name || this.inputs?.[slotIndex]?.name)) {
-                scheduleRefresh(this);
+            if (slotType === 1 && MEDIA_INPUTS.has(slotName)) {
+                scheduleNodeUpdate(this);
             }
             return result;
         };

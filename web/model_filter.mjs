@@ -1,16 +1,40 @@
 export const CHOOSE_MODEL = "— choose a compatible OpenRouter model —";
 export const NO_MODEL = "— no compatible text-output model —";
 export const CATALOG_ERROR = "— OpenRouter model catalog unavailable —";
-export const MEDIA_INPUTS = new Set(["image", "video", "audio"]);
+export const MEDIA_SPECS = [
+    { modality: "image", type: "IMAGE", names: ["image", "image_2", "image_3"] },
+    { modality: "video", type: "VIDEO", names: ["video", "video_2", "video_3"] },
+    { modality: "audio", type: "AUDIO", names: ["audio", "audio_2", "audio_3"] },
+];
+export const MEDIA_INPUTS = new Set(MEDIA_SPECS.flatMap((spec) => spec.names));
+
+export function mediaModality(name) {
+    return MEDIA_SPECS.find((spec) => spec.names.includes(name))?.modality ?? null;
+}
 
 export function requiredModalities(inputs = []) {
     const required = new Set(["text"]);
     for (const input of inputs) {
-        if (MEDIA_INPUTS.has(input?.name) && input.link != null) {
-            required.add(input.name);
+        const modality = mediaModality(input?.name);
+        if (modality && input.link != null) {
+            required.add(modality);
         }
     }
     return required;
+}
+
+export function desiredMediaInputNames(inputs = []) {
+    const linksByName = new Map(inputs.map((input) => [input?.name, input?.link]));
+    const desired = new Set();
+    for (const spec of MEDIA_SPECS) {
+        let highestConnected = -1;
+        spec.names.forEach((name, index) => {
+            if (linksByName.get(name) != null) highestConnected = index;
+        });
+        const visibleCount = Math.min(spec.names.length, Math.max(1, highestConnected + 2));
+        spec.names.slice(0, visibleCount).forEach((name) => desired.add(name));
+    }
+    return desired;
 }
 
 export function compatibleModels(models, required) {
