@@ -14,28 +14,47 @@ from .openrouter_simple.payload import build_payload
 CHOOSE_MODEL = "— choose a compatible OpenRouter model —"
 NO_MODEL = "— no compatible text-output model —"
 MODEL_SENTINELS = {CHOOSE_MODEL, NO_MODEL, "Loading OpenRouter models…"}
+MEDIA_SLOT_NAMES = (
+    "image",
+    "image_2",
+    "image_3",
+    "video",
+    "video_2",
+    "video_3",
+    "audio",
+    "audio_2",
+    "audio_3",
+)
 
 
 async def _prepare_media(
     deadline: NodeDeadline,
     *,
-    image: Any | None,
-    video: Any | None,
-    audio: dict[str, Any] | None,
-) -> list[PreparedMedia]:
-    tasks: list[asyncio.Task[PreparedMedia]] = []
-    if image is not None:
-        tasks.append(asyncio.create_task(prepare_image(deadline, image), name="openrouter-image"))
-    if video is not None:
-        tasks.append(asyncio.create_task(prepare_video(deadline, video), name="openrouter-video"))
-    if audio is not None:
-        tasks.append(asyncio.create_task(prepare_audio(deadline, audio), name="openrouter-audio"))
+    media_inputs: list[tuple[str, Any]],
+) -> list[tuple[str, PreparedMedia]]:
+    tasks: list[tuple[str, asyncio.Task[PreparedMedia]]] = []
+    for slot_name, value in media_inputs:
+        modality = slot_name.split("_", 1)[0]
+        if modality == "image":
+            awaitable = prepare_image(deadline, value)
+        elif modality == "video":
+            awaitable = prepare_video(deadline, value)
+        elif modality == "audio":
+            awaitable = prepare_audio(deadline, value)
+        else:
+            raise ValueError(f"unsupported media input slot: {slot_name}")
+        task = asyncio.create_task(awaitable, name=f"openrouter-{slot_name.replace('_', '-')}")
+        tasks.append((slot_name, task))
     try:
-        return list(await asyncio.gather(*tasks)) if tasks else []
+        prepared = await asyncio.gather(*(task for _name, task in tasks)) if tasks else []
+        return [
+            (slot_name, item)
+            for (slot_name, _task), item in zip(tasks, prepared, strict=True)
+        ]
     except BaseException:
-        for task in tasks:
+        for _name, task in tasks:
             task.cancel()
-        for task in tasks:
+        for _name, task in tasks:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
         raise
@@ -84,8 +103,14 @@ class OpenRouterSimple:
             },
             "optional": {
                 "image": ("IMAGE",),
+                "image_2": ("IMAGE",),
+                "image_3": ("IMAGE",),
                 "video": ("VIDEO",),
+                "video_2": ("VIDEO",),
+                "video_3": ("VIDEO",),
                 "audio": ("AUDIO",),
+                "audio_2": ("AUDIO",),
+                "audio_3": ("AUDIO",),
             },
         }
 
@@ -120,6 +145,12 @@ class OpenRouterSimple:
         image: Any | None = None,
         video: Any | None = None,
         audio: dict[str, Any] | None = None,
+        image_2: Any | None = None,
+        image_3: Any | None = None,
+        video_2: Any | None = None,
+        video_3: Any | None = None,
+        audio_2: dict[str, Any] | None = None,
+        audio_3: dict[str, Any] | None = None,
     ):
         api_key = resolve_generation_key()
         if not api_key:
@@ -131,24 +162,33 @@ class OpenRouterSimple:
             selected = snapshot.by_id(model)
             if selected is None:
                 raise ValueError(f"model '{model}' is absent from the current OpenRouter catalog")
-            required_modalities = {"text"}
-            if image is not None:
-                required_modalities.add("image")
-            if video is not None:
-                required_modalities.add("video")
-            if audio is not None:
-                required_modalities.add("audio")
+            values = {
+                "image": image,
+                "image_2": image_2,
+                "image_3": image_3,
+                "video": video,
+                "video_2": video_2,
+                "video_3": video_3,
+                "audio": audio,
+                "audio_2": audio_2,
+                "audio_3": audio_3,
+            }
+            media_inputs = [(name, values[name]) for name in MEDIA_SLOT_NAMES if values[name] is not None]
+            required_modalities = {
+                "text",
+                *(name.split("_", 1)[0] for name, _value in media_inputs),
+            }
             if not selected.accepts(required_modalities):
                 required = ", ".join(sorted(required_modalities))
                 raise ValueError(f"model '{model}' does not accept every connected modality ({required})")
 
-            media = await _prepare_media(deadline, image=image, video=video, audio=audio)
+            media = await _prepare_media(deadline, media_inputs=media_inputs)
             deadline.checkpoint()
             payload, parameter_info = build_payload(
                 model=selected,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                media=media,
+                media=[item for _name, item in media],
                 reasoning_effort=reasoning_effort,
                 seed=seed,
                 temperature=temperature,
@@ -168,7 +208,7 @@ class OpenRouterSimple:
                 "response_id": result.response_id,
                 "usage": result.usage,
                 "required_modalities": sorted(required_modalities),
-                "media": {item.modality: item.public_info() for item in media},
+                "media": {name: item.public_info() for name, item in media},
                 "parameters": parameter_info,
                 "model_catalog": {
                     "stale": snapshot.stale,

@@ -16,7 +16,7 @@ One OpenRouter node for multimodal context in and text only out. It keeps the us
 | `max_tokens` | One total output budget shared by hidden reasoning and visible completion. It maps to `max_completion_tokens` when available, then legacy `max_tokens`. |
 | `response_format` | `text` or `json_object`. JSON fails before submission when the model does not advertise structured output support. |
 | `zdr` | Off by default. When enabled, sends only `provider.zdr: true`. |
-| `image` / `video` / `audio` | Optional one-each context inputs. They never become generation outputs. |
+| `image*` / `video*` / `audio*` | Optional context inputs that progressively grow from one visible socket to three per modality, nine total. They never become generation outputs. |
 
 Outputs are `text`, compact JSON `info`, and `credits`. There are no IMAGE, VIDEO, or AUDIO outputs and the request hardcodes `modalities: ["text"]`.
 
@@ -48,18 +48,20 @@ The limits are decimal bytes measured before base64:
 - VIDEO: MP4/H.264/AAC, at most 10,000,000 bytes. An untrimmed compatible MP4 already below the cap is preserved byte-for-byte. Required conversion or trimming uses a two-pass budget derived from duration and capped at the smaller of 10 MB and the source size, so preparation never enlarges an under-limit video. Spatial fallback uses ffmpeg Lanczos and only lowers frame rate when the available bitrate is unusually small.
 - AUDIO: MP3, at most 1,000,000 bytes. Bitrate is derived from duration; SoXr is preferred, with high-precision FFmpeg SWR fallback when SoXr is unavailable.
 
-Connected media are prepared concurrently in temporary directories. The chat POST does not begin until every input is below its cap. A media item that cannot safely reach its cap fails locally, before a paid request.
+Up to three items per modality are prepared concurrently in temporary directories. The chat POST does not begin until every connected input is below its cap. A media item that cannot safely reach its cap fails locally, cancels its sibling preparations, and prevents the paid request.
 
 ## Model filtering
 
 The backend fetches OpenRouter's model metadata, keeps only models whose output modalities include text, and caches the normalized snapshot. The browser computes this intersection whenever a media cable changes:
 
 ```text
-required = text + every connected one of image/video/audio
+required = text + every connected kind among image/video/audio
 eligible = required ⊆ model.input_modalities
 ```
 
-The current selection is retained only if it remains eligible. Otherwise the node returns to **choose a compatible OpenRouter model**; it never silently changes to another paid model. The backend repeats the same compatibility check before preprocessing.
+The current selection is retained only if it remains eligible. Otherwise the node returns to **choose a compatible OpenRouter model**; it never silently changes to another paid model. Additional sockets of the same kind do not change the modality intersection. The backend repeats the same compatibility check before preprocessing.
+
+The Models API does not publish a universal per-request attachment-count limit. OpenRouter documents that file counts vary by provider and model, so the node's three-per-kind cap is a UI and resource bound—not a promise that every compatible model accepts all nine items. Provider rejections are surfaced without dropping attachments.
 
 If live metadata is unavailable, a prior disk cache is used and marked stale. With no live or cached catalog, execution stops clearly rather than guessing that a media model is compatible.
 
@@ -78,7 +80,7 @@ OpenRouter rejections remain normal ComfyUI execution errors. Stop uses ComfyUI'
 
 ## Deliberately excluded
 
-This node does not expose tools/functions, web search, PDFs/files, chat history, multiple attachments per modality, streaming partial text, JSON Schema, top-p/top-k/min-p, penalties, logprobs, provider ordering, price/latency routing, fallback models, transforms, plugins, or media generation.
+This node does not expose tools/functions, web search, PDFs/files, chat history, more than three attachments per modality, streaming partial text, JSON Schema, top-p/top-k/min-p, penalties, logprobs, provider ordering, price/latency routing, fallback models, transforms, plugins, or media generation.
 
 ## OpenRouter contracts used
 
@@ -105,7 +107,7 @@ No verification command makes a paid OpenRouter request. Local fake endpoints ex
 
 ## Architecture and operational boundary
 
-- `node.py` owns the ComfyUI input/output contract and request lifecycle.
+- `node.py` owns the nine-slot ComfyUI input/output contract and request lifecycle.
 - `openrouter_simple/models.py` owns live metadata normalization and the stale cache.
 - `openrouter_simple/media.py` owns exact pre-base64 caps and encoder selection.
 - `openrouter_simple/cancellation.py` owns the shared deadline, Stop polling, and subprocess cleanup.
