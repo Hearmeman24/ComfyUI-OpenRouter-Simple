@@ -145,26 +145,78 @@ async def _probe_video(deadline: NodeDeadline, ffprobe: str, source: str) -> dic
         ffprobe,
         "-v",
         "error",
-        "-select_streams",
-        "v:0",
         "-show_entries",
-        "stream=width,height,avg_frame_rate:format=duration",
+        "stream=codec_type,codec_name,width,height,avg_frame_rate,bit_rate:format=duration,format_name,bit_rate:format_tags=major_brand",
         "-of",
         "json",
         source,
     )
     try:
         payload = json.loads(out)
-        stream = payload["streams"][0]
-        duration = float(payload["format"]["duration"])
-        width = int(stream["width"])
-        height = int(stream["height"])
-        fps = _fraction(stream.get("avg_frame_rate"), 24.0)
+        streams = payload["streams"]
+        video_stream = next(stream for stream in streams if stream.get("codec_type") == "video")
+        audio_stream = next(
+            (stream for stream in streams if stream.get("codec_type") == "audio"), None
+        )
+        format_info = payload["format"]
+        duration = float(format_info["duration"])
+        width = int(video_stream["width"])
+        height = int(video_stream["height"])
+        fps = _fraction(video_stream.get("avg_frame_rate"), 24.0)
     except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise ValueError("could not determine video duration and dimensions") from exc
     if duration <= 0 or width <= 0 or height <= 0:
         raise ValueError("video has invalid duration or dimensions")
-    return {"duration": duration, "width": width, "height": height, "fps": max(1.0, fps)}
+    tags = format_info.get("tags") if isinstance(format_info.get("tags"), dict) else {}
+
+    def optional_int(value: Any) -> int | None:
+        try:
+            result = int(value)
+            return result if result > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "duration": duration,
+        "width": width,
+        "height": height,
+        "fps": max(1.0, fps),
+        "format_names": tuple(
+            part.strip().lower()
+            for part in str(format_info.get("format_name") or "").split(",")
+            if part.strip()
+        ),
+        "major_brand": str(tags.get("major_brand") or "").strip().lower(),
+        "video_codec": str(video_stream.get("codec_name") or "").lower(),
+        "audio_codec": (
+            str(audio_stream.get("codec_name") or "").lower() if audio_stream else None
+        ),
+        "video_bitrate": optional_int(video_stream.get("bit_rate")),
+        "audio_bitrate": optional_int(audio_stream.get("bit_rate")) if audio_stream else None,
+        "total_bitrate": optional_int(format_info.get("bit_rate")),
+    }
+
+
+def _has_active_trim(start_time: float, active_duration: float, source_duration: float) -> bool:
+    if start_time > 0.001:
+        return True
+    return active_duration > 0 and active_duration < source_duration - 0.001
+
+
+def _can_pass_video_through(
+    probe: dict[str, Any], source_bytes: int, start_time: float, active_duration: float
+) -> bool:
+    mp4_family = "mp4" in probe["format_names"] and probe["major_brand"] != "qt"
+    codecs_compatible = probe["video_codec"] == "h264" and probe["audio_codec"] in {
+        None,
+        "aac",
+    }
+    return (
+        source_bytes <= VIDEO_LIMIT
+        and not _has_active_trim(start_time, active_duration, probe["duration"])
+        and mp4_family
+        and codecs_compatible
+    )
 
 
 def _video_geometry(width: int, height: int, fps: float, bitrate: int) -> tuple[int, int, float]:
@@ -229,17 +281,17 @@ async def _encode_video_passes(
         str(passlog),
     ]
     await run_process(deadline, *common, "-pass", "1", "-an", "-f", "null", os.devnull)
+    audio = (
+        ["-map", "0:a:0?", "-c:a", "aac", "-b:a", str(audio_bitrate)]
+        if audio_bitrate > 0
+        else ["-an"]
+    )
     await run_process(
         deadline,
         *common,
         "-pass",
         "2",
-        "-map",
-        "0:a?",
-        "-c:a",
-        "aac",
-        "-b:a",
-        str(audio_bitrate),
+        *audio,
         "-movflags",
         "+faststart",
         str(output),
@@ -262,14 +314,43 @@ async def prepare_video(deadline: NodeDeadline, video: Any) -> PreparedMedia:
         start_time, active_duration = (0.0, 0.0)
         if hasattr(video, "get_active_trim_window"):
             start_time, active_duration = video.get_active_trim_window()
+        start_time = float(start_time)
+        active_duration = float(active_duration)
         duration = float(active_duration or probe["duration"] - start_time)
         if duration <= 0:
             raise ValueError("video trim window contains no frames")
-        total_bitrate = int(VIDEO_LIMIT * 8 * 0.92 / duration)
-        audio_bitrate = min(128_000, max(32_000, int(total_bitrate * 0.12)))
+
+        if _can_pass_video_through(probe, source_bytes, start_time, active_duration):
+            data = await deadline.run(asyncio.to_thread(Path(source_path).read_bytes))
+            return PreparedMedia(
+                modality="video",
+                mime_type="video/mp4",
+                data=data,
+                source_bytes=source_bytes,
+                details={
+                    "duration_seconds": round(probe["duration"], 3),
+                    "width": probe["width"],
+                    "height": probe["height"],
+                    "fps": round(probe["fps"], 3),
+                    "video_bitrate": probe["video_bitrate"],
+                    "audio_bitrate": probe["audio_bitrate"],
+                    "resampler": "none",
+                    "transcode": "none",
+                },
+            )
+
+        target_bytes = min(VIDEO_LIMIT, source_bytes)
+        total_bitrate = int(target_bytes * 8 * 0.92 / duration)
+        audio_bitrate = (
+            min(128_000, max(32_000, int(total_bitrate * 0.12)))
+            if probe["audio_codec"]
+            else 0
+        )
         video_bitrate = total_bitrate - audio_bitrate
         if video_bitrate < 100_000:
-            raise ValueError("video is too long to fit below 10 MB at the minimum safe bitrate")
+            raise ValueError(
+                "video cannot fit the non-expanding byte target at the minimum safe bitrate"
+            )
         width, height, fps = _video_geometry(
             probe["width"], probe["height"], probe["fps"], video_bitrate
         )
@@ -286,11 +367,11 @@ async def prepare_video(deadline: NodeDeadline, video: Any) -> PreparedMedia:
                 width=width,
                 height=height,
                 fps=fps,
-                start_time=float(start_time),
-                duration=float(active_duration),
+                start_time=start_time,
+                duration=active_duration,
             )
             size = output.stat().st_size
-            if size <= VIDEO_LIMIT:
+            if size <= target_bytes:
                 data = await deadline.run(asyncio.to_thread(output.read_bytes))
                 return PreparedMedia(
                     modality="video",
@@ -305,14 +386,17 @@ async def prepare_video(deadline: NodeDeadline, video: Any) -> PreparedMedia:
                         "video_bitrate": video_bitrate,
                         "audio_bitrate": audio_bitrate,
                         "resampler": "ffmpeg Lanczos" if (width, height) != (probe["width"], probe["height"]) else "none",
+                        "transcode": "H.264/AAC",
                     },
                 )
-            ratio = VIDEO_LIMIT / max(size, 1) * 0.90
+            ratio = target_bytes / max(size, 1) * 0.90
             video_bitrate = int(video_bitrate * ratio)
             if video_bitrate < 100_000:
                 break
             width, height, fps = _video_geometry(probe["width"], probe["height"], probe["fps"], video_bitrate)
-        raise ValueError("video encoder could not produce a result below 10 MB")
+        raise ValueError(
+            f"video encoder could not produce a result below {target_bytes} bytes"
+        )
 
 
 def _write_audio_wav(audio: dict[str, Any], path: Path) -> tuple[int, float, int, int]:

@@ -45,7 +45,7 @@ Legacy `LLM_KEY` is accepted second. An optional `OPENROUTER_MANAGEMENT_KEY` ena
 The limits are decimal bytes measured before base64:
 
 - IMAGE: WebP, at most 1,000,000 bytes. Quality is reduced before dimensions; spatial fallback preserves aspect ratio with Pillow Lanczos.
-- VIDEO: MP4/H.264/AAC, at most 10,000,000 bytes. Two-pass bitrate is derived from duration; spatial fallback uses ffmpeg Lanczos and only lowers frame rate when the available bitrate is unusually small.
+- VIDEO: MP4/H.264/AAC, at most 10,000,000 bytes. An untrimmed compatible MP4 already below the cap is preserved byte-for-byte. Required conversion or trimming uses a two-pass budget derived from duration and capped at the smaller of 10 MB and the source size, so preparation never enlarges an under-limit video. Spatial fallback uses ffmpeg Lanczos and only lowers frame rate when the available bitrate is unusually small.
 - AUDIO: MP3, at most 1,000,000 bytes. Bitrate is derived from duration; SoXr is preferred, with high-precision FFmpeg SWR fallback when SoXr is unavailable.
 
 Connected media are prepared concurrently in temporary directories. The chat POST does not begin until every input is below its cap. A media item that cannot safely reach its cap fails locally, before a paid request.
@@ -71,6 +71,7 @@ If live metadata is unavailable, a prior disk cache is used and marked stale. Wi
 - Temporary directories are removed on success, rejection, timeout, and Stop.
 - The paid chat POST is never automatically retried, avoiding ambiguous double spend.
 - Error bodies are capped and secrets, bearer tokens, and URL query strings are redacted.
+- Provider rejections surface sanitized nested provider diagnostics and opt-in router metadata when OpenRouter supplies them; inline media remains redacted.
 - Credits failure is non-fatal after a successful text completion.
 
 OpenRouter rejections remain normal ComfyUI execution errors. Stop uses ComfyUI's native interruption exception, so it is shown as an interrupted workflow rather than a fabricated API failure.
@@ -85,6 +86,7 @@ This node does not expose tools/functions, web search, PDFs/files, chat history,
 - [Reasoning tokens and effort](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)
 - [Model metadata](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties)
 - [Provider routing and ZDR](https://openrouter.ai/docs/guides/routing/provider-selection)
+- [Router metadata for diagnostics](https://openrouter.ai/docs/guides/features/router-metadata)
 - [Image inputs](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)
 - [Video inputs](https://openrouter.ai/docs/guides/overview/multimodal/videos)
 - [Audio inputs](https://openrouter.ai/docs/guides/overview/multimodal/audio)

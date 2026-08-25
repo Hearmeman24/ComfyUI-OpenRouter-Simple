@@ -33,6 +33,11 @@ def resolve_generation_key() -> str:
 
 
 def sanitize_message(message: str) -> str:
+    message = re.sub(
+        r"(?i)data:[a-z0-9.+-]+/[a-z0-9.+-]+;base64,[a-z0-9+/=_-]+",
+        "[REDACTED MEDIA]",
+        message,
+    )
     message = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [REDACTED]", message)
     message = re.sub(r"sk-or-v1-[A-Za-z0-9]+", "[REDACTED]", message)
     words: list[str] = []
@@ -74,11 +79,51 @@ async def _limited_json(response: aiohttp.ClientResponse, limit: int) -> Any:
         raise OpenRouterRequestError("OpenRouter returned malformed JSON") from exc
 
 
+def _provider_diagnostic(value: Any) -> str:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith(("{", "[")):
+            try:
+                return _provider_diagnostic(json.loads(stripped))
+            except json.JSONDecodeError:
+                pass
+        return sanitize_message(stripped)
+    if isinstance(value, dict):
+        for key in ("error", "message", "detail", "error_description"):
+            if key in value:
+                detail = _provider_diagnostic(value[key])
+                if detail:
+                    return detail
+    return ""
+
+
 def _error_detail(payload: Any) -> str:
     if isinstance(payload, dict):
         error = payload.get("error")
         if isinstance(error, dict):
-            return sanitize_message(str(error.get("message") or error.get("code") or ""))
+            parts: list[str] = []
+            message = sanitize_message(str(error.get("message") or error.get("code") or ""))
+            if message:
+                parts.append(message)
+            metadata = error.get("metadata")
+            if isinstance(metadata, dict):
+                provider = sanitize_message(str(metadata.get("provider_name") or ""))
+                provider_code = sanitize_message(
+                    str(metadata.get("provider_error_code") or metadata.get("error_code") or "")
+                )
+                raw = _provider_diagnostic(metadata.get("raw"))
+                if provider:
+                    parts.append(f"provider={provider}")
+                if provider_code:
+                    parts.append(f"provider_code={provider_code}")
+                if raw and raw != message:
+                    parts.append(f"upstream={raw}")
+            router = payload.get("openrouter_metadata")
+            if isinstance(router, dict):
+                summary = sanitize_message(str(router.get("summary") or ""))
+                if summary:
+                    parts.append(f"routing={summary}")
+            return sanitize_message("; ".join(dict.fromkeys(parts)))
         if error:
             return sanitize_message(str(error))
     return ""
@@ -102,7 +147,11 @@ def _extract_text(message: Any) -> str:
 async def create_chat(deadline: NodeDeadline, payload: dict[str, Any], api_key: str) -> ChatResult:
     async def request() -> ChatResult:
         timeout = aiohttp.ClientTimeout(total=max(0.1, deadline.remaining))
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "X-OpenRouter-Metadata": "enabled",
+        }
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(f"{api_base_url()}/chat/completions", headers=headers, json=payload) as response:
                 if response.status >= 400:
