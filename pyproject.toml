@@ -9,8 +9,17 @@ dependencies = [
     "numpy>=1.26",
     "Pillow>=10,<13",
 ]
+classifiers = [
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/Hearmeman24/ComfyUI-OpenRouter-Simple"
+Documentation = "https://github.com/Hearmeman24/ComfyUI-OpenRouter-Simple#readme"
+"Bug Tracker" = "https://github.com/Hearmeman24/ComfyUI-OpenRouter-Simple/issues"
 
 [tool.comfy]
 PublisherId = "hearmeman24"
 DisplayName = "OpenRouter Simple"
 Icon = ""
+requires-comfyui = ">=0.32.0"

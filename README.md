@@ -23,9 +23,17 @@ Outputs are `text`, compact JSON `info`, and `credits`. There are no IMAGE, VIDE
 
 Requires ComfyUI v0.32.0 or newer, Python 3.10+, and `ffmpeg`/`ffprobe` for video or audio inputs.
 
+Install from the Comfy Registry:
+
+```bash
+comfy node install comfyui-openrouter-simple
+```
+
+Or install directly from GitHub:
+
 ```bash
 cd ComfyUI/custom_nodes
-git clone <repository-url> ComfyUI-OpenRouter-Simple
+git clone https://github.com/Hearmeman24/ComfyUI-OpenRouter-Simple.git
 python -m pip install -r ComfyUI-OpenRouter-Simple/requirements.txt
 ```
 
@@ -113,4 +121,4 @@ No verification command makes a paid OpenRouter request. Local fake endpoints ex
 - `openrouter_simple/client.py` owns bounded OpenRouter HTTP and credits lookup.
 - `web/` owns display-only live filtering; it is never authoritative for execution.
 
-This repository is a standalone custom node. Installing it locally does not deploy it to a RunPod template, publish it to the Comfy registry, or create a remote repository. There is no project brain page yet.
+This is a standalone public custom node distributed through [GitHub](https://github.com/Hearmeman24/ComfyUI-OpenRouter-Simple) and the Comfy Registry. Installing it does not deploy it to a RunPod template. There is no project brain page yet.
