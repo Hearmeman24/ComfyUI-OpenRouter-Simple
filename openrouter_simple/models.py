@@ -11,6 +11,7 @@ from typing import Any
 import aiohttp
 
 from .cancellation import NodeDeadline
+from .http import read_bounded
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
@@ -127,9 +128,7 @@ class ModelCatalog:
         timeout = aiohttp.ClientTimeout(total=max(0.1, min(timeout_seconds, 5.0)))
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(f"{api_base_url()}/models", params={"output_modalities": "text"}) as response:
-                body = await response.content.read(2_000_001)
-                if len(body) > 2_000_000:
-                    raise RuntimeError("OpenRouter model catalog exceeded the 2 MB safety limit")
+                body = await read_bounded(response.content, 2_000_000, label="OpenRouter model catalog")
                 if response.status >= 400:
                     raise RuntimeError(f"OpenRouter model catalog returned HTTP {response.status}")
         payload = json.loads(body)
