@@ -7,6 +7,15 @@ export const MEDIA_SPECS = [
     { modality: "audio", type: "AUDIO", names: ["audio", "audio_2", "audio_3"] },
 ];
 export const MEDIA_INPUTS = new Set(MEDIA_SPECS.flatMap((spec) => spec.names));
+const LEGACY_WIDGET_COUNT_WITH_SEED = 10;
+const LEGACY_SEED_WIDGET_INDEX = 2;
+
+export function migrateLegacySeedWidgetValues(serializedNode) {
+    const values = serializedNode?.widgets_values;
+    if (Array.isArray(values) && values.length === LEGACY_WIDGET_COUNT_WITH_SEED) {
+        values.splice(LEGACY_SEED_WIDGET_INDEX, 1);
+    }
+}
 
 export function mediaModality(name) {
     return MEDIA_SPECS.find((spec) => spec.names.includes(name))?.modality ?? null;

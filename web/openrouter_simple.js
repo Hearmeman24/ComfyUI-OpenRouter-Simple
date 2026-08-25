@@ -7,6 +7,7 @@ import {
     MEDIA_INPUTS,
     MEDIA_SPECS,
     desiredMediaInputNames,
+    migrateLegacySeedWidgetValues,
     requiredModalities,
     compatibleModels,
     nextModelValue,
@@ -106,6 +107,7 @@ app.registerExtension({
 
         const onConfigure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function () {
+            migrateLegacySeedWidgetValues(arguments[0]);
             const result = onConfigure?.apply(this, arguments);
             scheduleNodeUpdate(this);
             return result;

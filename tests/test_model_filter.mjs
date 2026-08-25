@@ -6,9 +6,43 @@ import {
     CHOOSE_MODEL,
     compatibleModels,
     desiredMediaInputNames,
+    migrateLegacySeedWidgetValues,
     nextModelValue,
     requiredModalities,
 } from "../web/model_filter.mjs";
+
+test("legacy saved nodes drop only the positional seed widget", () => {
+    const legacy = {
+        widgets_values: [
+            "google/model",
+            "auto",
+            471994551739533,
+            120,
+            1.0,
+            4096,
+            "text",
+            false,
+            "system",
+            "user",
+        ],
+    };
+    migrateLegacySeedWidgetValues(legacy);
+    assert.deepEqual(legacy.widgets_values, [
+        "google/model",
+        "auto",
+        120,
+        1.0,
+        4096,
+        "text",
+        false,
+        "system",
+        "user",
+    ]);
+
+    const current = { widgets_values: [...legacy.widgets_values] };
+    migrateLegacySeedWidgetValues(current);
+    assert.deepEqual(current.widgets_values, legacy.widgets_values);
+});
 
 const models = [
     { id: "text", input_modalities: ["text"], output_modalities: ["text"] },

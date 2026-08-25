@@ -25,7 +25,6 @@ class PayloadTests(unittest.TestCase):
             user_prompt="user",
             media=media,
             reasoning_effort="high",
-            seed=42,
             temperature=0.5,
             max_tokens=1234,
             response_format="json_object",
@@ -37,6 +36,9 @@ class PayloadTests(unittest.TestCase):
         self.assertEqual(payload["reasoning"], {"effort": "high"})
         self.assertEqual(payload["response_format"], {"type": "json_object"})
         self.assertEqual(payload["provider"], {"zdr": True})
+        self.assertNotIn("seed", payload)
+        self.assertNotIn("seed", info["applied"])
+        self.assertNotIn("seed", info["omitted"])
         self.assertEqual(payload["messages"][1]["content"][1]["type"], "image_url")
         self.assertEqual(info["applied"]["max_tokens"]["wire_parameter"], "max_completion_tokens")
         for excluded in ("tools", "web_search", "top_p", "plugins", "transforms"):
@@ -49,7 +51,6 @@ class PayloadTests(unittest.TestCase):
             user_prompt="hello",
             media=[],
             reasoning_effort="auto",
-            seed=1,
             temperature=1.0,
             max_tokens=99,
             response_format="text",
@@ -59,7 +60,7 @@ class PayloadTests(unittest.TestCase):
         self.assertNotIn("temperature", payload)
         self.assertNotIn("seed", payload)
         self.assertIn("temperature", info["omitted"])
-        self.assertIn("seed", info["omitted"])
+        self.assertNotIn("seed", info["omitted"])
 
     def test_all_nine_media_items_are_serialized_in_order(self):
         media = [
@@ -73,7 +74,6 @@ class PayloadTests(unittest.TestCase):
             user_prompt="enumerate every attachment",
             media=media,
             reasoning_effort="auto",
-            seed=0,
             temperature=1,
             max_tokens=256,
             response_format="text",
@@ -93,7 +93,6 @@ class PayloadTests(unittest.TestCase):
                 user_prompt="hello",
                 media=[],
                 reasoning_effort="auto",
-                seed=0,
                 temperature=1,
                 max_tokens=10,
                 response_format="json_object",

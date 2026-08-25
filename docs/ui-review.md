@@ -29,7 +29,7 @@ The node deliberately inherits ComfyUI's native component styling, so it avoids 
 
 ## 4. Recommended fixes
 
-1. `node.py` — keep widget order: model/reasoning/seed/timeout/temperature/max tokens/format/ZDR, then system and user prompts.
+1. `node.py` — keep widget order: model/reasoning/timeout/temperature/max tokens/format/ZDR, then system and user prompts.
 2. `web/openrouter_simple.js` — preserve distinct loading, compatible-count, cached, empty, and catalog-error labels; never replace an invalid selection with a paid model.
 3. Live ComfyUI check — confirm the two textareas start at a compact native height and remain manually resizable.
 4. `web/openrouter_simple.js` — retain one empty successor per modality, never remove linked restored sockets, and cap each modality at three.
