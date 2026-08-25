@@ -39,6 +39,7 @@ if [[ "$MODE" == "fast" ]]; then
         tests.test_payload \
         tests.test_cancellation \
         tests.test_client \
+        tests.test_http \
         tests.test_node_contract
 else
     "$PYTHON" -m unittest discover -s tests -p 'test_*.py'

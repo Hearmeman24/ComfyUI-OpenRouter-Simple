@@ -11,6 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 import aiohttp
 
 from .cancellation import NodeDeadline, NodeTimeoutError
+from .http import ResponseTooLarge, read_bounded
 from .models import api_base_url
 
 MAX_ERROR_BYTES = 16_384
@@ -63,9 +64,10 @@ def _friendly_status(status: int) -> str:
 
 
 async def _limited_json(response: aiohttp.ClientResponse, limit: int) -> Any:
-    body = await response.content.read(limit + 1)
-    if len(body) > limit:
-        raise OpenRouterRequestError(f"OpenRouter response exceeded the {limit} byte safety limit")
+    try:
+        body = await read_bounded(response.content, limit, label="OpenRouter response")
+    except ResponseTooLarge as exc:
+        raise OpenRouterRequestError(str(exc)) from exc
     try:
         return json.loads(body)
     except json.JSONDecodeError as exc:
@@ -104,8 +106,9 @@ async def create_chat(deadline: NodeDeadline, payload: dict[str, Any], api_key: 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(f"{api_base_url()}/chat/completions", headers=headers, json=payload) as response:
                 if response.status >= 400:
-                    body = await response.content.read(MAX_ERROR_BYTES + 1)
-                    if len(body) > MAX_ERROR_BYTES:
+                    try:
+                        body = await read_bounded(response.content, MAX_ERROR_BYTES, label="OpenRouter error response")
+                    except ResponseTooLarge:
                         detail = "response body omitted"
                     else:
                         try:
