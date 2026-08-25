@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import time
 import unittest
@@ -54,6 +55,54 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("authentication failed", message)
         self.assertNotIn(secret, message)
         self.assertIn("[REDACTED]", message)
+
+    async def test_rejection_surfaces_nested_provider_diagnostic(self):
+        secret = "sk-or-v1-SUPERSECRET"
+        saw_metadata_header = False
+
+        async def rejected(request):
+            nonlocal saw_metadata_header
+            saw_metadata_header = request.headers.get("X-OpenRouter-Metadata") == "enabled"
+            return web.json_response(
+                {
+                    "error": {
+                        "message": "Provider returned error",
+                        "code": 400,
+                        "metadata": {
+                            "provider_name": "Google AI Studio",
+                            "provider_error_code": "INVALID_ARGUMENT",
+                            "raw": json.dumps(
+                                {
+                                    "error": {
+                                        "message": (
+                                            "inline video data:video/mp4;base64,AAAAAA was rejected; "
+                                            f"Bearer {secret}"
+                                        )
+                                    }
+                                }
+                            ),
+                        },
+                    },
+                    "openrouter_metadata": {
+                        "summary": "available=1, attempts exhausted",
+                        "attempts": [{"provider": "Google AI Studio", "status": 400}],
+                    },
+                },
+                status=400,
+            )
+
+        base = await self.start_server([("POST", "/chat/completions", rejected)])
+        with mock.patch.dict(os.environ, {"OPENROUTER_BASE_URL": base}):
+            with self.assertRaises(OpenRouterRequestError) as raised:
+                await create_chat(NodeDeadline(2), {"model": "x"}, secret)
+        message = str(raised.exception)
+        self.assertTrue(saw_metadata_header)
+        self.assertIn("Google AI Studio", message)
+        self.assertIn("INVALID_ARGUMENT", message)
+        self.assertIn("inline video [REDACTED MEDIA] was rejected", message)
+        self.assertIn("available=1, attempts exhausted", message)
+        self.assertNotIn("AAAAAA", message)
+        self.assertNotIn(secret, message)
 
     async def test_credits_failure_is_non_fatal(self):
         async def failed(_request):
