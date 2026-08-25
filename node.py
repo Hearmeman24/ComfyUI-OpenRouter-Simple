@@ -74,10 +74,6 @@ class OpenRouterSimple:
                     ["auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"],
                     {"default": "auto"},
                 ),
-                "seed": (
-                    "INT",
-                    {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "control_after_generate": "fixed"},
-                ),
                 "timeout_seconds": (
                     "INT",
                     {"default": 120, "min": 1, "max": 3600, "step": 1, "display": "number"},
@@ -136,7 +132,6 @@ class OpenRouterSimple:
         user_prompt: str,
         model: str,
         reasoning_effort: str,
-        seed: int,
         timeout_seconds: int,
         temperature: float,
         max_tokens: int,
@@ -190,7 +185,6 @@ class OpenRouterSimple:
                 user_prompt=user_prompt,
                 media=[item for _name, item in media],
                 reasoning_effort=reasoning_effort,
-                seed=seed,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 response_format=response_format,

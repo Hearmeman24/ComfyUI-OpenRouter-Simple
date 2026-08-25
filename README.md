@@ -10,7 +10,6 @@ One OpenRouter node for multimodal context in and text only out. It keeps the us
 | `user_prompt` | The user message sent with any connected media. |
 | `model` | Live OpenRouter text-output models, filtered by connected modalities. |
 | `reasoning_effort` | `auto`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. Unsupported explicit reasoning fails before submission. |
-| `seed` | Sent only when the selected model advertises `seed`; otherwise reported as omitted in `info`. |
 | `timeout_seconds` | One deadline for catalog refresh, preprocessing, and the chat request. Credits use only time still left, capped at 3 seconds. |
 | `temperature` | Sent only when supported by the selected model. |
 | `max_tokens` | One total output budget shared by hidden reasoning and visible completion. It maps to `max_completion_tokens` when available, then legacy `max_tokens`. |
@@ -80,7 +79,7 @@ OpenRouter rejections remain normal ComfyUI execution errors. Stop uses ComfyUI'
 
 ## Deliberately excluded
 
-This node does not expose tools/functions, web search, PDFs/files, chat history, more than three attachments per modality, streaming partial text, JSON Schema, top-p/top-k/min-p, penalties, logprobs, provider ordering, price/latency routing, fallback models, transforms, plugins, or media generation.
+This node does not expose seed, tools/functions, web search, PDFs/files, chat history, more than three attachments per modality, streaming partial text, JSON Schema, top-p/top-k/min-p, penalties, logprobs, provider ordering, price/latency routing, fallback models, transforms, plugins, or media generation.
 
 ## OpenRouter contracts used
 

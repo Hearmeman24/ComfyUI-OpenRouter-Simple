@@ -27,7 +27,6 @@ def build_payload(
     user_prompt: str,
     media: list[PreparedMedia],
     reasoning_effort: str,
-    seed: int,
     temperature: float,
     max_tokens: int,
     response_format: str,
@@ -59,12 +58,6 @@ def build_payload(
         applied["max_tokens"] = {"wire_parameter": "max_tokens", "value": int(max_tokens)}
     else:
         omitted["max_tokens"] = "selected model advertises neither output-budget parameter"
-
-    if model.supports("seed"):
-        payload["seed"] = int(seed)
-        applied["seed"] = int(seed)
-    else:
-        omitted["seed"] = "selected model does not advertise seed"
 
     if reasoning_effort != "auto":
         if not (model.reasoning or model.supports("reasoning")):
