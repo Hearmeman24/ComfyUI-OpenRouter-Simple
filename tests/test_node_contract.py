@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import json
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -48,8 +49,10 @@ class NodeContractTests(unittest.TestCase):
                 "max_tokens",
                 "response_format",
                 "zdr",
+                "regenerate",
             },
         )
+        self.assertEqual(inputs["required"]["regenerate"], ("BOOLEAN", {"default": True}))
         self.assertEqual(
             list(inputs["optional"]),
             [
@@ -64,6 +67,11 @@ class NodeContractTests(unittest.TestCase):
                 "audio_3",
             ],
         )
+
+    def test_regenerate_controls_comfy_cache_fingerprint(self):
+        node = self.module.NODE_CLASS_MAPPINGS["OpenRouterSimple"]
+        self.assertTrue(math.isnan(node.IS_CHANGED(regenerate=True)))
+        self.assertIs(node.IS_CHANGED(regenerate=False), False)
 
     def test_all_populated_media_slots_are_prepared_in_stable_order(self):
         values = [(name, object()) for name in (
@@ -169,6 +177,7 @@ class NodeContractTests(unittest.TestCase):
                     max_tokens=64,
                     response_format="text",
                     zdr=False,
+                    regenerate=True,
                     image="first-image",
                     image_3="third-image",
                     video_2="second-video",
@@ -178,6 +187,7 @@ class NodeContractTests(unittest.TestCase):
 
         self.assertEqual((text, credits), ("ok", "credits"))
         self.assertIsNotNone(captured_payload)
+        self.assertNotIn("regenerate", captured_payload)
         content = captured_payload["messages"][0]["content"]
         self.assertEqual(
             [part["type"] for part in content],
