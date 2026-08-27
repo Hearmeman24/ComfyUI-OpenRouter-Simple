@@ -7,14 +7,27 @@ export const MEDIA_SPECS = [
     { modality: "audio", type: "AUDIO", names: ["audio", "audio_2", "audio_3"] },
 ];
 export const MEDIA_INPUTS = new Set(MEDIA_SPECS.flatMap((spec) => spec.names));
-const LEGACY_WIDGET_COUNT_WITH_SEED = 10;
-const LEGACY_SEED_WIDGET_INDEX = 2;
+const SEEDLESS_WIDGET_COUNT = 9;
+const CURRENT_WIDGET_COUNT = 10;
+const SEED_WIDGET_INDEX = 2;
+const REGENERATE_WIDGET_INDEX = 7;
 
-export function migrateLegacySeedWidgetValues(serializedNode) {
+export function migrateLegacyWidgetValues(serializedNode) {
     const values = serializedNode?.widgets_values;
-    if (Array.isArray(values) && values.length === LEGACY_WIDGET_COUNT_WITH_SEED) {
-        values.splice(LEGACY_SEED_WIDGET_INDEX, 1);
-    }
+    if (!Array.isArray(values)) return;
+
+    const isSeedEra = values.length === CURRENT_WIDGET_COUNT
+        && typeof values[5] === "number"
+        && typeof values[6] === "string"
+        && typeof values[7] === "boolean";
+    if (isSeedEra) values.splice(SEED_WIDGET_INDEX, 1);
+
+    const isSeedless = values.length === SEEDLESS_WIDGET_COUNT
+        && typeof values[5] === "string"
+        && typeof values[6] === "boolean"
+        && typeof values[7] === "string"
+        && typeof values[8] === "string";
+    if (isSeedless) values.splice(REGENERATE_WIDGET_INDEX, 0, true);
 }
 
 export function mediaModality(name) {

@@ -88,6 +88,7 @@ class OpenRouterSimple:
                 ),
                 "response_format": (["text", "json_object"], {"default": "text"}),
                 "zdr": ("BOOLEAN", {"default": False}),
+                "regenerate": ("BOOLEAN", {"default": True}),
                 "system_prompt": (
                     "STRING",
                     {"multiline": True, "default": "You are a helpful assistant."},
@@ -123,8 +124,8 @@ class OpenRouterSimple:
         return True
 
     @classmethod
-    def IS_CHANGED(cls, **_kwargs):
-        return float("nan")
+    def IS_CHANGED(cls, regenerate: bool = True, **_kwargs):
+        return float("nan") if regenerate else False
 
     async def run(
         self,
@@ -137,6 +138,7 @@ class OpenRouterSimple:
         max_tokens: int,
         response_format: str,
         zdr: bool,
+        regenerate: bool,
         image: Any | None = None,
         video: Any | None = None,
         audio: dict[str, Any] | None = None,

@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-openrouter-simple"
 description = "A bounded multimodal OpenRouter node for ComfyUI with text-only output."
-version = "0.1.0"
+version = "0.2.0"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [

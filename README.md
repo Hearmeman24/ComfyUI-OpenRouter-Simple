@@ -15,9 +15,12 @@ One OpenRouter node for multimodal context in and text only out. It keeps the us
 | `max_tokens` | One total output budget shared by hidden reasoning and visible completion. It maps to `max_completion_tokens` when available, then legacy `max_tokens`. |
 | `response_format` | `text` or `json_object`. JSON fails before submission when the model does not advertise structured output support. |
 | `zdr` | Off by default. When enabled, sends only `provider.zdr: true`. |
+| `regenerate` | On by default. `true` makes a fresh request each queue; `false` reuses ComfyUI's cached outputs while this node and all upstream inputs are unchanged. |
 | `image*` / `video*` / `audio*` | Optional context inputs that progressively grow from one visible socket to three per modality, nine total. They never become generation outputs. |
 
 Outputs are `text`, compact JSON `info`, and `credits`. There are no IMAGE, VIDEO, or AUDIO outputs and the request hardcodes `modalities: ["text"]`.
+
+`regenerate=false` uses ComfyUI's normal in-memory execution cache; it does not create a separate persistent cache. Editing a prompt or setting, changing connected media, or changing another upstream input invalidates the cache and runs the node once to produce the new output. Restarting ComfyUI may also clear the reusable output.
 
 ## Install
 

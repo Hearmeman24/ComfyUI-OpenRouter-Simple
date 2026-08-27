@@ -6,13 +6,13 @@ import {
     CHOOSE_MODEL,
     compatibleModels,
     desiredMediaInputNames,
-    migrateLegacySeedWidgetValues,
+    migrateLegacyWidgetValues,
     nextModelValue,
     requiredModalities,
 } from "../web/model_filter.mjs";
 
-test("legacy saved nodes drop only the positional seed widget", () => {
-    const legacy = {
+test("seed-era saved nodes remove seed and default regenerate on", () => {
+    const seedEra = {
         widgets_values: [
             "google/model",
             "auto",
@@ -26,8 +26,8 @@ test("legacy saved nodes drop only the positional seed widget", () => {
             "user",
         ],
     };
-    migrateLegacySeedWidgetValues(legacy);
-    assert.deepEqual(legacy.widgets_values, [
+    migrateLegacyWidgetValues(seedEra);
+    assert.deepEqual(seedEra.widgets_values, [
         "google/model",
         "auto",
         120,
@@ -35,13 +35,34 @@ test("legacy saved nodes drop only the positional seed widget", () => {
         4096,
         "text",
         false,
+        true,
         "system",
         "user",
     ]);
+});
 
-    const current = { widgets_values: [...legacy.widgets_values] };
-    migrateLegacySeedWidgetValues(current);
-    assert.deepEqual(current.widgets_values, legacy.widgets_values);
+test("seedless saved nodes gain regenerate without shifting prompts", () => {
+    const seedless = {
+        widgets_values: [
+            "google/model", "auto", 120, 1.0, 4096, "text", false, "system", "user",
+        ],
+    };
+    migrateLegacyWidgetValues(seedless);
+    assert.deepEqual(seedless.widgets_values, [
+        "google/model", "auto", 120, 1.0, 4096, "text", false, true, "system", "user",
+    ]);
+});
+
+test("current saved nodes retain an explicit regenerate value", () => {
+    const current = {
+        widgets_values: [
+            "google/model", "auto", 120, 1.0, 4096, "text", false, false, "system", "user",
+        ],
+    };
+    migrateLegacyWidgetValues(current);
+    assert.deepEqual(current.widgets_values, [
+        "google/model", "auto", 120, 1.0, 4096, "text", false, false, "system", "user",
+    ]);
 });
 
 const models = [
