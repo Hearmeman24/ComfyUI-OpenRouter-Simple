@@ -108,6 +108,11 @@ class OpenRouterSimple:
                 "audio": ("AUDIO",),
                 "audio_2": ("AUDIO",),
                 "audio_3": ("AUDIO",),
+                "api_key": ("STRING", {
+                    "default": "",
+                    "multiline": False,
+                    "tooltip": "OpenRouter API key. Leave blank to use OPENROUTER_API_KEY or LLM_KEY. Keys entered here are saved with the workflow.",
+                }),
             },
         }
 
@@ -148,10 +153,11 @@ class OpenRouterSimple:
         video_3: Any | None = None,
         audio_2: dict[str, Any] | None = None,
         audio_3: dict[str, Any] | None = None,
+        api_key: str = "",
     ):
-        api_key = resolve_generation_key()
+        api_key = resolve_generation_key(api_key)
         if not api_key:
-            raise ValueError("Set OPENROUTER_API_KEY (or legacy LLM_KEY) in the ComfyUI environment")
+            raise ValueError("Enter or connect api_key, or set OPENROUTER_API_KEY (or legacy LLM_KEY) in the ComfyUI environment")
 
         deadline = NodeDeadline(float(timeout_seconds))
         try:
