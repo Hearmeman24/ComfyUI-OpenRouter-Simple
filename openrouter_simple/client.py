@@ -28,8 +28,12 @@ class ChatResult:
     usage: dict[str, Any]
 
 
-def resolve_generation_key() -> str:
-    return (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("LLM_KEY") or "").strip()
+def resolve_generation_key(api_key: str = "") -> str:
+    """Explicit node key wins; blank values fall back without changing the environment."""
+    for value in (api_key, os.environ.get("OPENROUTER_API_KEY"), os.environ.get("LLM_KEY")):
+        if value and value.strip():
+            return value.strip()
+    return ""
 
 
 def sanitize_message(message: str) -> str:
@@ -56,7 +60,7 @@ def sanitize_message(message: str) -> str:
 def _friendly_status(status: int) -> str:
     return {
         400: "OpenRouter rejected the request as invalid",
-        401: "OpenRouter authentication failed; check OPENROUTER_API_KEY",
+        401: "OpenRouter authentication failed; check api_key or the configured environment key",
         402: "OpenRouter reported insufficient credits",
         403: "OpenRouter denied this model or request",
         408: "OpenRouter timed out while processing the request",

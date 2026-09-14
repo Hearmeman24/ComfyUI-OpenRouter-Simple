@@ -8,6 +8,7 @@ One OpenRouter node for multimodal context in and text only out. It keeps the us
 | --- | --- |
 | `system_prompt` | Optional system instruction. |
 | `user_prompt` | The user message sent with any connected media. |
+| `api_key` | Optional OpenRouter key. Enter it here or convert the widget to an input and connect a STRING/API Key box. Blank uses the environment fallback. |
 | `model` | Live OpenRouter text-output models, filtered by connected modalities. |
 | `reasoning_effort` | `auto`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. Unsupported explicit reasoning fails before submission. |
 | `timeout_seconds` | One deadline for catalog refresh, preprocessing, and the chat request. Credits use only time still left, capped at 3 seconds. |
@@ -42,13 +43,15 @@ python -m pip install -r ComfyUI-OpenRouter-Simple/requirements.txt
 
 Restart ComfyUI, then add **LLM → OpenRouter → OpenRouter Simple (Text Output)**.
 
-Set the generation key in ComfyUI's environment; there is deliberately no key widget saved into workflow JSON:
+Enter a generation key in `api_key`, or convert that widget to an input and connect a STRING/API Key box. The explicit key takes precedence. Keys entered in a widget or connected box can appear in saved workflows, generated-media metadata and ComfyUI error reports. Clear them before sharing those files; the environment fallback keeps keys out of graph inputs.
+
+You can also leave `api_key` blank and set the key in ComfyUI's environment:
 
 ```bash
 export OPENROUTER_API_KEY="your-generation-key"
 ```
 
-Legacy `LLM_KEY` is accepted second. An optional `OPENROUTER_MANAGEMENT_KEY` enables true account-credit lookup. Without it, the `credits` output reports the generation key's `limit_remaining` from `/key` and labels it as an API-key limit—not account credit.
+Environment fallback checks `OPENROUTER_API_KEY`, then legacy `LLM_KEY`, ignoring blank values. Existing workflows without `api_key` keep working with this fallback. An optional `OPENROUTER_MANAGEMENT_KEY` enables true account-credit lookup. Without it, the `credits` output reports the generation key's `limit_remaining` from `/key` and labels it as an API-key limit—not account credit.
 
 ## Media preparation
 

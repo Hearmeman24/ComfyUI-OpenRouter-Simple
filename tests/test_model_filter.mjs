@@ -132,3 +132,12 @@ test("an invalid paid model is never silently replaced", () => {
 test("catalog errors are distinct from an empty compatibility result", () => {
     assert.notEqual(CATALOG_ERROR, "— no compatible text-output model —");
 });
+
+
+test("key-era saved nodes preserve every widget including the appended API key", () => {
+    const values = ["vendor/model", "auto", 120, 1, 4096, "text", false, true, "system", "user", "test-key"];
+    const node = { widgets_values: [...values] };
+    migrateLegacyWidgetValues(node);
+    migrateLegacyWidgetValues(node);
+    assert.deepEqual(node.widgets_values, values);
+});

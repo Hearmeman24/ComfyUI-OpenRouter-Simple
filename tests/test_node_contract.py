@@ -2,6 +2,7 @@ import asyncio
 import importlib.util
 import json
 import math
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -65,8 +66,48 @@ class NodeContractTests(unittest.TestCase):
                 "audio",
                 "audio_2",
                 "audio_3",
+                "api_key",
             ],
         )
+
+    def test_optional_key_keeps_existing_widget_order(self):
+        inputs = self.node_module.OpenRouterSimple.INPUT_TYPES()
+        self.assertEqual(list(inputs["required"]), [
+            "model", "reasoning_effort", "timeout_seconds", "temperature",
+            "max_tokens", "response_format", "zdr", "regenerate",
+            "system_prompt", "user_prompt",
+        ])
+        self.assertEqual(inputs["optional"]["api_key"][0], "STRING")
+        self.assertEqual(inputs["optional"]["api_key"][1]["default"], "")
+
+    def test_key_selection_reaches_chat_and_credits_without_leaking(self):
+        selected = ModelInfo("vendor/text", "Text", ("text",), ("text",), ("max_tokens",), False)
+        kwargs = dict(system_prompt="", user_prompt="Hello", model="vendor/text",
+                      reasoning_effort="auto", timeout_seconds=5, temperature=1,
+                      max_tokens=32, response_format="text", zdr=False, regenerate=False)
+        cases = [
+            ({"api_key": "  explicit-key  "}, {"OPENROUTER_API_KEY": "env-key", "LLM_KEY": "legacy-key"}, "explicit-key"),
+            ({"api_key": "explicit-key"}, {}, "explicit-key"),
+            ({"api_key": "  "}, {"OPENROUTER_API_KEY": " env-key "}, "env-key"),
+            ({}, {"OPENROUTER_API_KEY": "  ", "LLM_KEY": " legacy-key "}, "legacy-key"),
+            ({}, {"LLM_KEY": "legacy-key"}, "legacy-key"),
+        ]
+        for key_arg, env, expected in cases:
+            with self.subTest(key_arg=key_arg, env=env), mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(self.node_module.CATALOG, "get", mock.AsyncMock(return_value=ModelSnapshot((selected,), 1))), \
+                 mock.patch.object(self.node_module, "create_chat", mock.AsyncMock(return_value=ChatResult("ok", "test", {}))) as chat, \
+                 mock.patch.object(self.node_module, "lookup_credits", mock.AsyncMock(return_value="credits")) as credits:
+                result = asyncio.run(self.node_module.OpenRouterSimple().run(**kwargs, **key_arg))
+                self.assertEqual(chat.call_args.args[2], expected)
+                self.assertEqual(credits.call_args.args[1], expected)
+                self.assertNotIn(expected, json.dumps(chat.call_args.args[1]))
+                self.assertNotIn(expected, json.dumps(result))
+                self.assertEqual(dict(os.environ), env)
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(self.node_module.CATALOG, "get", mock.AsyncMock()) as catalog:
+            with self.assertRaisesRegex(ValueError, "api_key"):
+                asyncio.run(self.node_module.OpenRouterSimple().run(**kwargs))
+            catalog.assert_not_called()
 
     def test_regenerate_controls_comfy_cache_fingerprint(self):
         node = self.module.NODE_CLASS_MAPPINGS["OpenRouterSimple"]
